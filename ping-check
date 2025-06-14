@@ -5,6 +5,43 @@ MIN_UPTIME_SECONDS=120
 PING_CHECK_ADDRESS_A=8.8.8.8
 PING_CHECK_ADDRESS_B=1.1.1.1
 MONITORED_INTERFACE=igc0
+VERBOSE=0
+
+# Logger Settings
+LOGGER_TAG=pingcheck
+
+# Log Fields - Set by following script.
+action="none"
+if_addr="none"
+a_state="none"
+b_state="none"
+
+# Provide a parsable log on exit always.
+log_exit() {
+  logger -t $LOGGER_TAG "${uptime},${MONITORED_INTERFACE},${action},${if_addr},${a_state},${b_state}"
+}
+trap log_exit EXIT
+
+# Logging function with verbose mode check.
+log() {
+    if [ "$VERBOSE" -eq 1 ]; then
+        logger -t $LOGGER_TAG "$@"
+    fi
+}
+
+# Argument parsing.
+while getopts "v" opt; do
+    case "$opt" in
+        v)
+            VERBOSE=1
+            ;;
+        \?)
+            echo "Usage: $0 [-v]" >&2
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND - 1))
 
 # Get current uptime of system.
 curtime=$(date +%s)
@@ -13,36 +50,46 @@ uptime=$(($curtime - $uptime))
 
 # Only proceed if we've been up long enough.
 if [ $uptime -gt $MIN_UPTIME_SECONDS ]; then
-    logger -t pingcheck "Testing network connectivity. Current uptime is $uptime seconds."
+    log "Testing network connectivity. Current uptime is $uptime seconds."
 
     # Check that the monitored interface has an IP address. If not, reset the interface and exit.
     MONITORED_INTERFACE_IP=$(/sbin/ifconfig "$MONITORED_INTERFACE" | awk '/inet / {print $2}')
     if [ -z "$MONITORED_INTERFACE_IP" ]; then
-	logger -t pingcheck "No IPv4 address detected on interface $MONITORED_INTERFACE. Resetting the interface."
-	/sbin/ifconfig $MONITORED_INTERFACE down
-	/sbin/ifconfig $MONITORED_INTERFACE up
+        log "No IPv4 address detected on interface $MONITORED_INTERFACE. Resetting the interface."
+      	/sbin/ifconfig $MONITORED_INTERFACE down
+      	/sbin/ifconfig $MONITORED_INTERFACE up
         sleep 20
-        logger -t pingcheck "Reset $MONITORED_INTERFACE."
+        log "Reset $MONITORED_INTERFACE."
+        action="reset-if-no-ip"
         exit 0
     else
-        logger -t pingcheck "Detected IPv4 address $MONITORED_INTERFACE_IP on interface $MONITORED_INTERFACE."
+        log "Detected IPv4 address $MONITORED_INTERFACE_IP on interface $MONITORED_INTERFACE."
+        if_addr=$MONITORED_INTERFACE_IP
     fi
 
     # Test both configured test IPs. Reset the interface if both fail.
     if ! ping -c 1 $PING_CHECK_ADDRESS_A > /dev/null 2>&1; then
-	logger -t pingcheck "Ping to $PING_ADDRESS_A failed. Trying $PING_ADDRESS_B."
+	      log "Ping to $PING_ADDRESS_A failed. Trying $PING_ADDRESS_B."
+        a_state="fail"
         if ! ping -c 1 $PING_CHECK_ADDRESS_B > /dev/null 2>&1; then
-            logger -t pingcheck "Failed to ping $PING_ADDRESS_A and $PING_ADDRESS_B. Resetting $MONITORED_INTERFACE."
+            log "Failed to ping $PING_ADDRESS_A and $PING_ADDRESS_B. Resetting $MONITORED_INTERFACE."
             /sbin/ifconfig $MONITORED_INTERFACE down
             /sbin/ifconfig $MONITORED_INTERFACE up
             sleep 20
-            logger -t pingcheck "Reset $MONITORED_INTERFACE."
+            log "Reset $MONITORED_INTERFACE."
+            action="reset-if-no-ping"
+            b_state="fail"
+            exit 0
        else
-            logger -t pingcheck "Ping to $PING_CHECK_ADDRESS_B successful."
+            log "Ping to $PING_CHECK_ADDRESS_B successful."
+            action="none"
+            b_state="success"
        fi
     else
-       logger -t pingcheck "Ping to $PING_CHECK_ADDRESS_A successful."
+       log "Ping to $PING_CHECK_ADDRESS_A successful."
+       action="none"
+       a_state="success"
     fi
 else
-    logger pingcheck "System rebooted recently. Waiting until uptime is atleast $MIN_UPTIME_SECONDS seconds to test connectivity. "
+    log "System rebooted recently. Waiting until uptime is atleast $MIN_UPTIME_SECONDS seconds to test connectivity. "
 fi
