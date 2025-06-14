@@ -18,7 +18,7 @@ b_state="none"
 
 # Provide a parsable log on exit always.
 log_exit() {
-  logger -t $LOGGER_TAG "${uptime},${MONITORED_INTERFACE},${action},${if_addr},${a_state},${b_state}"
+  logger -t $LOGGER_TAG "${uptime},${MONITORED_INTERFACE},${action},${if_addr},${PING_CHECK_ADDRESS_A},${a_state},${PING_CHECK_ADDRESS_B},${b_state}"
 }
 trap log_exit EXIT
 
