@@ -82,14 +82,13 @@ if [ $uptime -gt $MIN_UPTIME_SECONDS ]; then
             exit 0
        else
             log "Ping to $PING_CHECK_ADDRESS_B successful."
-            action="none"
             b_state="success"
        fi
     else
        log "Ping to $PING_CHECK_ADDRESS_A successful."
-       action="none"
        a_state="success"
     fi
 else
-    log "System rebooted recently. Waiting until uptime is atleast $MIN_UPTIME_SECONDS seconds to test connectivity. "
+    log "System rebooted recently. Waiting until uptime is atleast $MIN_UPTIME_SECONDS seconds to test connectivity."
+    action="boot-wait"
 fi
